@@ -3,6 +3,9 @@
 /node_modules
 .env
 .temp
+/infra/dist
+/infra/node_modules
+/infra/package-lock.json
 
 # Logs
 logs

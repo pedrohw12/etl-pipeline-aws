@@ -1,0 +1,5 @@
+config:
+  etl:landingBucketName: ""
+  etl:transformedBucketName: ""
+  etl:lambdaFunctionName: ""
+  etl:glueJobName: ""

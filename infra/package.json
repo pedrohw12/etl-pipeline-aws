@@ -1,0 +1,22 @@
+{
+  "name": "etl-infra-pulumi",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "destroy": "pulumi destroy",
+    "refresh": "pulumi refresh"
+  },
+  "dependencies": {
+    "@aws-sdk/client-glue": "^3.904.0",
+    "@pulumi/aws": "^6.64.0",
+    "@pulumi/pulumi": "^3.134.0",
+    "esbuild": "^0.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "typescript": "^5.9.3"
+  }
+}

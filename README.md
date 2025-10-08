@@ -2,10 +2,10 @@
 
 This project showcases a minimal ETL pipeline built with NestJS and AWS services (S3, Lambda, and Glue). It follows the flow shown in the provided diagram:
 
-1. A file is uploaded to an S3 **landing** bucket.
-2. The S3 `ObjectCreated` event invokes a Lambda function.
-3. The Lambda function triggers an AWS Glue job.
-4. The Glue job processes the file and writes the transformed data to a second S3 bucket.
+1. A file is uploaded to an S3 **landing** bucket, where the NestJS API can enrich the object with metadata (such as source and timestamp) and enforce a folder structure for raw data ingestion.
+2. The S3 `ObjectCreated` event invokes a Lambda function that logs the event payload, performs lightweight validation (file type, presence of metadata), and assembles the parameters required to start a downstream transformation.
+3. The Lambda function then triggers an AWS Glue job, injecting the source bucket/key, the destination bucket, and any contextual arguments so Glue can locate the raw file and persist results under a predictable prefix.
+4. The Glue job reads the raw records, applies transformations (e.g., normalising fields, deriving uppercase names, tagging each record as processed), and writes the enriched dataset to the **transformed** S3 bucket ready for analytics or further pipelines.
 
 The NestJS application focuses on orchestrating and observing this pipeline. It exposes endpoints that let you upload demo data, invoke the Lambda, and query Glue job runs. Sample code for the Lambda handler and the Glue job script is included.
 
@@ -84,28 +84,55 @@ The controller returns the bucket/key that was uploaded, the S3 event structure 
 
 ## AWS resources to create
 
-You can provision the infrastructure manually or with your preferred IaC solution. At minimum you need:
+You can provision the infrastructure manually or with the Pulumi project under `infra/`. At minimum you need S3 landing/transformed buckets, the Lambda trigger, a Glue job, and IAM roles that allow the components to interact.
 
-1. **S3 buckets**
-   - Landing bucket (`AWS_SOURCE_BUCKET`)
-   - Transformed bucket (`AWS_TRANSFORMED_BUCKET`)
+## Pulumi deployment
 
-2. **Lambda function**
-   - Runtime: `nodejs18.x`
-   - Handler: `index.handler` (build `lambda/handler.ts` to JavaScript and upload it)
-   - Environment variables: `AWS_REGION`, `AWS_GLUE_JOB_NAME`, `AWS_TRANSFORMED_BUCKET`
-   - IAM permissions: `s3:GetObject`, `glue:StartJobRun`
-   - Trigger: S3 `ObjectCreated` events from the landing bucket
+The `infra/` folder contains a Pulumi TypeScript program that deploys everything the diagram shows: buckets, Lambda trigger, Glue job, IAM roles, and the S3 event notification wiring.
 
-3. **Glue job**
-   - Script: `glue/job.py`
-   - Arguments passed by the Lambda: `--SOURCE_BUCKET`, `--SOURCE_KEY`, `--OUTPUT_BUCKET`
-   - IAM role: permissions for reading the landing bucket and writing to the transformed bucket
+### Prerequisites
+- AWS CLI configured with credentials for the target account (`aws configure` or environment variables)
+- `pulumi` CLI installed (see [Pulumi installs](https://www.pulumi.com/docs/install/))
+- `npm` ≥ 8 and Node.js ≥ 18
 
-4. **IAM roles**
-   - NestJS application credentials need access to S3, Lambda invocation, and Glue job execution.
+### Configure and deploy
+1. Install dependencies and log in to Pulumi (e.g. `pulumi login --local` or your preferred backend):
 
-Once the resources exist, the NestJS app can be used to upload demo data and observe the full ETL flow.
+   ```bash
+   cd infra
+   npm install
+   pulumi login
+   ```
+
+2. Create or select a stack (use `dev` as an example) and set optional config values:
+
+   ```bash
+   pulumi stack init dev   # skip if the stack already exists
+   pulumi config set etl:landingBucketName your-landing-bucket-name --stack dev
+   pulumi config set etl:transformedBucketName your-transformed-bucket --stack dev
+   pulumi config set etl:lambdaFunctionName etl-trigger --stack dev
+   pulumi config set etl:glueJobName etl-demo-job --stack dev
+   ```
+
+   Empty values fall back to auto-generated names, so you can omit any of the settings above.
+
+3. Preview and deploy:
+
+   ```bash
+   pulumi preview   # optional but recommended
+   pulumi up
+   ```
+
+The deployment outputs the bucket names, Lambda function, and Glue job. Resources are tagged and created with `forceDestroy` so they can be torn down easily during experimentation.
+
+### Tear down
+- Destroy the stack when you are done:
+
+  ```bash
+  pulumi destroy
+  ```
+
+Once the Pulumi stack is deployed, the NestJS app can drive the pipeline end-to-end.
 
 ## Local development tips
 
@@ -116,5 +143,5 @@ Once the resources exist, the NestJS app can be used to upload demo data and obs
 ## Next steps
 
 - Package the Lambda handler using esbuild or webpack before deploying.
-- Automate the infrastructure with CDK, Terraform, or the Serverless Framework.
+- Expand the Pulumi stack with VPC networking, CI/CD, or additional Glue crawlers.
 - Add persistence to record executed job runs and expose them through NestJS.
