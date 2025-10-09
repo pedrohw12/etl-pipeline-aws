@@ -1,5 +1,5 @@
 config:
-  etl:landingBucketName: ""
-  etl:transformedBucketName: ""
-  etl:lambdaFunctionName: ""
-  etl:glueJobName: ""
+  etl:landingBucketName: "your-landing-bucket-name"
+  etl:transformedBucketName: "your-transformed-bucket"
+  etl:lambdaFunctionName: "etl-trigger"
+  etl:glueJobName: "etl-demo-job"

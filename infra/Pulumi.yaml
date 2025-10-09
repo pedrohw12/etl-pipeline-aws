@@ -1,12 +1,13 @@
 name: etl-pipeline
 runtime: nodejs
 description: ETL pipeline infrastructure with Pulumi (S3 -> Lambda -> Glue)
-config:
-  etl:landingBucketName:
-    description: landing S3 bucket
-  etl:transformedBucketName:
-    description: transformed S3 bucket
-  etl:lambdaFunctionName:
-    description: Lambda function that triggers Glue
-  etl:glueJobName:
-    description: Glue ETL job
+template:
+  config:
+    etl:landingBucketName:
+      description: landing S3 bucket
+    etl:transformedBucketName:
+      description: transformed S3 bucket
+    etl:lambdaFunctionName:
+      description: Lambda function that triggers Glue
+    etl:glueJobName:
+      description: Glue ETL job
