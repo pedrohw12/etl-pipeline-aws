@@ -3,13 +3,12 @@
 This project showcases a minimal ETL pipeline built with NestJS and AWS services (S3, Lambda, and Glue).
 
 ### End-to-end flow (with code pointers)
-- Uploads start in the NestJS API (`POST /etl/run` in `src/etl/etl.controller.ts`) which delegates to `EtlService.runPipeline` (`src/etl/etl.service.ts:41`). That service writes the raw file to the landing bucket through `S3Service.uploadObject`.
-- `S3Service` (`src/aws/s3.service.ts`) wraps the AWS SDK `PutObjectCommand`; it resolves bucket names from `ConfigService` and ensures the bucket exists, so upstream callers only provide payload details.
-- After the upload, `EtlService` fabricates the same S3 event structure that real S3 notifications emit and hands it to `LambdaService.invokeEtlLambda` (`src/aws/lambda.service.ts`). This method looks up the Lambda ARN from configuration (`aws.lambdaFunctionName`) and invokes it asynchronously.
-- The runtime Lambda handler (`lambda/handler.ts`) is what production S3 notifications call. It receives the event, extracts the bucket/key, and issues `StartJobRunCommand` to Glue using environment variables pre-wired by the Pulumi stack.
-- For local observability, the NestJS `EtlService` also triggers the Glue job directly via `GlueService.startEtlJob` (`src/aws/glue.service.ts`), mirroring the request the Lambda sends. The Glue script at `glue/job.py` reads those arguments, transforms the JSON lines, and writes to the transformed bucket.
+- NestJS exposes `/etl/upload` and `/etl/run` (`src/etl/etl.controller.ts`), and both delegate to `EtlService` (`src/etl/etl.service.ts`). The service forwards the request payload to the ingest Lambda via `LambdaService.invokeIngestLambda` (`src/aws/lambda.service.ts`), using the configured function name (`aws.ingestLambdaFunctionName`).
+- The ingest Lambda (`lambda/ingest-handler.ts`) writes the object into the landing bucket, preserving any metadata from the request and storing an optional `pipeline-output-bucket` hint so downstream stages can override the default destination.
+- S3 emits an `ObjectCreated` notification that triggers the processor Lambda (`lambda/handler.ts`). That function loads object metadata with `HeadObjectCommand`, chooses the destination bucket, and starts the Glue job through `StartJobRunCommand`.
+- The Glue script at `glue/job.py` reads the raw records, enriches them, and writes the transformed dataset to the resolved bucket/prefix.
 
-Infrastructure that wires the real S3 → Lambda → Glue path lives in `infra/index.ts`, where Pulumi creates the buckets, IAM roles, Lambda function, and the S3 notification that points at the handler.
+Infrastructure that wires the real S3 → Lambda → Glue path lives in `infra/index.ts`, where Pulumi creates the buckets, IAM roles, both Lambda functions, and the S3 notification that points at the processor handler.
 
 The NestJS application exposes endpoints that let you upload demo data, invoke the Lambda, and query Glue job runs. Sample code for the Lambda handler and the Glue job script is included.
 
@@ -22,6 +21,7 @@ The NestJS application exposes endpoints that let you upload demo data, invoke t
 │   ├── main.ts                    # Application bootstrap
 │   ├── aws/                       # AWS service wrappers (S3, Lambda, Glue)
 │   └── etl/                       # Controllers, DTOs, orchestration logic
+├── lambda/ingest-handler.ts       # Lambda that uploads payloads into the landing bucket
 ├── lambda/handler.ts              # Sample Lambda that starts the Glue job
 ├── glue/job.py                    # Example Glue ETL script
 ├── .env.example                   # Environment variables used by the app
@@ -84,7 +84,7 @@ The NestJS application exposes endpoints that let you upload demo data, invoke t
 }
 ```
 
-The controller returns the bucket/key that was uploaded, the S3 event structure sent to the Lambda, and the Glue job run ID.
+The controller responds with the bucket/key plus the Lambda request ID that accepted the ingestion. The Glue job starts asynchronously after the S3 notification fires; capture the job run ID from the processor Lambda logs and query `/etl/jobs/:id` when you need status. Custom `outputBucket` and `metadata` values travel with the object as S3 metadata so the processor Lambda can adjust the Glue invocation.
 
 ## AWS resources to create
 
@@ -114,6 +114,7 @@ The `infra/` folder contains a Pulumi TypeScript program that deploys everything
    pulumi stack init dev   # skip if the stack already exists
    pulumi config set etl:landingBucketName your-landing-bucket-name --stack dev
    pulumi config set etl:transformedBucketName your-transformed-bucket --stack dev
+   pulumi config set etl:ingestLambdaFunctionName etl-ingest --stack dev
    pulumi config set etl:lambdaFunctionName etl-trigger --stack dev
    pulumi config set etl:glueJobName etl-demo-job --stack dev
    ```
@@ -140,12 +141,12 @@ Once the Pulumi stack is deployed, the NestJS app can drive the pipeline end-to-
 
 ## Local development tips
 
-- The `run` endpoint invokes the Lambda asynchronously *and* triggers the Glue job directly. This keeps the pipeline observable during local development even if the Lambda is not deployed yet.
+- Both `/etl/upload` and `/etl/run` delegate to the ingest Lambda; watch the ingest and processor Lambda logs to follow the asynchronous chain and capture Glue job run IDs as they are emitted.
 - Replace the AWS SDK clients with `@aws-sdk/client-*` mocks or tools like [LocalStack](https://www.localstack.cloud/) if you want to run everything locally.
 - Extend the DTOs and services to add validation, error handling, or additional metadata relevant to your use case.
 
 ## Next steps
 
-- Package the Lambda handler using esbuild or webpack before deploying.
+- Package the Lambda handlers using esbuild or webpack before deploying.
 - Expand the Pulumi stack with VPC networking, CI/CD, or additional Glue crawlers.
 - Add persistence to record executed job runs and expose them through NestJS.

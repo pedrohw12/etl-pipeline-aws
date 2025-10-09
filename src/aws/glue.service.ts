@@ -24,8 +24,8 @@ export class GlueService {
     this.transformedBucket = transformedBucket;
   }
 
-  // The ETL service and Lambda handler both hand in bucket/key pairs so this method
-  // can relay them to Glue; defaults ensure the transformed bucket is consistent.
+  // Exposed for cases where the pipeline needs to trigger Glue directly
+  // (e.g. backfills or manual retries) while still enforcing default buckets.
   async startEtlJob(options: {
     sourceBucket: string;
     sourceKey: string;

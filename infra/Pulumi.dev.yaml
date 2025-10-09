@@ -1,5 +1,6 @@
 config:
   etl:landingBucketName: "your-landing-bucket-name"
   etl:transformedBucketName: "your-transformed-bucket"
+  etl:ingestLambdaFunctionName: "etl-ingest"
   etl:lambdaFunctionName: "etl-trigger"
   etl:glueJobName: "etl-demo-job"

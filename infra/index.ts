@@ -8,6 +8,7 @@ const config = new pulumi.Config('etl');
 const landingBucketName = optional(config.get('landingBucketName'));
 const transformedBucketName = optional(config.get('transformedBucketName'));
 const lambdaFunctionName = optional(config.get('lambdaFunctionName'));
+const ingestLambdaFunctionName = optional(config.get('ingestLambdaFunctionName'));
 const glueJobName = optional(config.get('glueJobName')) ?? 'etl-demo-job';
 
 function optional(value: string | undefined | null): string | undefined {
@@ -47,6 +48,65 @@ if (transformedBucketName) {
 
 // Destination bucket for the Glue job output; name is injected into the Lambda env.
 const transformedBucket = new aws.s3.BucketV2('transformedBucket', transformedBucketArgs);
+
+const ingestLambdaRole = new aws.iam.Role('ingestLambdaRole', {
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: { Service: 'lambda.amazonaws.com' },
+        Action: 'sts:AssumeRole',
+      },
+    ],
+  }),
+  description: 'Lambda role that uploads incoming payloads into the landing bucket',
+});
+
+new aws.iam.RolePolicyAttachment('ingestLambdaBasicExecution', {
+  role: ingestLambdaRole.name,
+  policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+});
+
+const ingestLambdaPolicy = landingBucket.arn.apply((landingArn) =>
+  JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: ['s3:PutObject', 's3:GetObject'],
+        Resource: [`${landingArn}/*`],
+      },
+    ],
+  }),
+);
+
+new aws.iam.RolePolicy('ingestLambdaBucketPolicy', {
+  role: ingestLambdaRole.id,
+  policy: ingestLambdaPolicy,
+});
+
+const ingestLambdaCode = bundleLambda(path.resolve(__dirname, '../lambda/ingest-handler.ts'));
+
+const ingestLambdaArgs: aws.lambda.FunctionArgs = {
+  role: ingestLambdaRole.arn,
+  runtime: 'nodejs18.x',
+  handler: 'index.handler',
+  timeout: 30,
+  code: ingestLambdaCode,
+  environment: {
+    variables: {
+      AWS_REGION: aws.getRegionOutput().name,
+      AWS_SOURCE_BUCKET: landingBucket.bucket,
+    },
+  },
+};
+
+if (ingestLambdaFunctionName) {
+  ingestLambdaArgs.name = ingestLambdaFunctionName;
+}
+
+const ingestLambdaFn = new aws.lambda.Function('etlIngest', ingestLambdaArgs);
 
 const glueRole = new aws.iam.Role('glueJobRole', {
   assumeRolePolicy: JSON.stringify({
@@ -127,7 +187,7 @@ if (glueJobName) {
   glueJobArgs.name = glueJobName;
 }
 
-// Managed Glue job that the Lambda (and NestJS during dev) starts with bucket/key args.
+// Managed Glue job that the S3-triggered Lambda starts with bucket/key args.
 const glueJob = new aws.glue.Job('glueJob', glueJobArgs, { dependsOn: [glueScriptObject] });
 
 const lambdaRole = new aws.iam.Role('lambdaRole', {
@@ -227,5 +287,6 @@ new aws.s3.BucketNotification('landingNotifications',
 
 export const landingBucketOutput = landingBucket.bucket;
 export const transformedBucketOutput = transformedBucket.bucket;
+export const ingestLambdaFunctionOutput = ingestLambdaFn.name;
 export const lambdaFunctionOutput = lambdaFn.name;
 export const glueJobOutput = glueJob.name;

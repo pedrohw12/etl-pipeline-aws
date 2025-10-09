@@ -3,5 +3,5 @@ export interface AwsConfig {
   sourceBucket: string;
   transformedBucket: string;
   glueJobName: string;
-  lambdaFunctionName: string;
+  ingestLambdaFunctionName: string;
 }

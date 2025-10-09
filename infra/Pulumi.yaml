@@ -7,6 +7,8 @@ template:
       description: landing S3 bucket
     etl:transformedBucketName:
       description: transformed S3 bucket
+    etl:ingestLambdaFunctionName:
+      description: Lambda function that uploads objects to S3
     etl:lambdaFunctionName:
       description: Lambda function that triggers Glue
     etl:glueJobName:

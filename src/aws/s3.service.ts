@@ -23,8 +23,7 @@ export class S3Service {
     this.defaultBucket = sourceBucket;
   }
 
-  // Called by EtlService before invoking downstream steps; makes sure the working
-  // bucket exists before any object write is attempted.
+  // Makes sure the working bucket exists before any object write is attempted.
   async ensureBucket(bucketName?: string): Promise<void> {
     const bucket = bucketName ?? this.defaultBucket;
     try {
@@ -43,8 +42,7 @@ export class S3Service {
     }
   }
 
-  // Accepts payload details from the controller/ETL service, resolves the bucket,
-  // and forwards the upload to AWS S3. The written object later triggers the Lambda.
+  // Accepts payload details, resolves the bucket, and forwards the upload to AWS S3.
   async uploadObject(options: {
     bucket?: string;
     key: string;

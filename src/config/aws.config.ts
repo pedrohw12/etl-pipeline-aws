@@ -5,6 +5,7 @@ export const awsConfig = () => ({
     transformedBucket:
       process.env.AWS_TRANSFORMED_BUCKET ?? 'etl-transformed-bucket',
     glueJobName: process.env.AWS_GLUE_JOB_NAME ?? 'etl-demo-job',
-    lambdaFunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME ?? 'etl-trigger',
+    ingestLambdaFunctionName:
+      process.env.AWS_INGEST_LAMBDA_FUNCTION_NAME ?? 'etl-ingest',
   },
 });
