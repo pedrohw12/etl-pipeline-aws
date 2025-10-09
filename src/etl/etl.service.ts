@@ -24,6 +24,8 @@ export class EtlService {
     this.defaultBucket = sourceBucket;
   }
 
+  // Entry point for POST /etl/upload; writes to S3 via S3Service so the object can
+  // be picked up by the rest of the pipeline.
   async uploadSourceObject(dto: UploadRequestDto) {
     const bucket = dto.bucket ?? this.defaultBucket;
     await this.s3Service.uploadObject({
@@ -37,6 +39,7 @@ export class EtlService {
     return { bucket, key: dto.key };
   }
 
+  // Replicates the S3 notification payload the managed Lambda would receive in AWS.
   buildS3Event(bucket: string, key: string): S3Event {
     return {
       Records: [
@@ -52,12 +55,16 @@ export class EtlService {
     };
   }
 
+  // Sends the synthetic S3 event to the deployed Lambda so the same code path runs
+  // whether the trigger is manual (API) or automatic (bucket notification).
   async invokeLambdaForObject(bucket: string, key: string) {
     const event = this.buildS3Event(bucket, key);
     await this.lambdaService.invokeEtlLambda(event);
     return event;
   }
 
+  // Primary orchestration: uploads data, triggers the Lambda, then mirrors the Lambda's
+  // Glue invocation locally so clients get a job run id immediately.
   async runPipeline(dto: RunPipelineDto) {
     const { bucket, key } = await this.uploadSourceObject(dto);
 

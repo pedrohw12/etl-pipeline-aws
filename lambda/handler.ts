@@ -1,5 +1,9 @@
 import { GlueClient, StartJobRunCommand } from '@aws-sdk/client-glue';
 
+// This handler is invoked by the S3 notification configured in infra/index.ts.
+// S3 supplies the bucket/key in the event, and Pulumi wires the environment
+// variables so we can pass them straight into Glue.
+
 type S3EventRecord = {
   s3: {
     bucket: { name: string };
@@ -26,6 +30,8 @@ export const handler = async (event: S3Event) => {
   const sourceBucket = record.s3.bucket.name;
   const sourceKey = decodeURIComponent(record.s3.object.key);
 
+  // Mirrors the job invocation that the NestJS service performs locally,
+  // but here it runs inside AWS when S3 triggers the Lambda.
   const command = new StartJobRunCommand({
     JobName: jobName,
     Arguments: {

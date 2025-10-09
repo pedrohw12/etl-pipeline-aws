@@ -30,6 +30,7 @@ if (landingBucketName) {
   landingBucketArgs.bucket = landingBucketName;
 }
 
+// Landing bucket that both NestJS uploads into and S3 uses to trigger the Lambda.
 const landingBucket = new aws.s3.BucketV2('landingBucket', landingBucketArgs);
 
 const transformedBucketArgs: aws.s3.BucketV2Args = {
@@ -44,6 +45,7 @@ if (transformedBucketName) {
   transformedBucketArgs.bucket = transformedBucketName;
 }
 
+// Destination bucket for the Glue job output; name is injected into the Lambda env.
 const transformedBucket = new aws.s3.BucketV2('transformedBucket', transformedBucketArgs);
 
 const glueRole = new aws.iam.Role('glueJobRole', {
@@ -125,6 +127,7 @@ if (glueJobName) {
   glueJobArgs.name = glueJobName;
 }
 
+// Managed Glue job that the Lambda (and NestJS during dev) starts with bucket/key args.
 const glueJob = new aws.glue.Job('glueJob', glueJobArgs, { dependsOn: [glueScriptObject] });
 
 const lambdaRole = new aws.iam.Role('lambdaRole', {
@@ -198,6 +201,7 @@ if (lambdaFunctionName) {
   lambdaArgs.name = lambdaFunctionName;
 }
 
+// Lambda that S3 invokes; environment variables inform the handler which Glue job to call.
 const lambdaFn = new aws.lambda.Function('etlTrigger', lambdaArgs);
 
 const lambdaPermission = new aws.lambda.Permission('allowS3Invoke', {
@@ -207,6 +211,7 @@ const lambdaPermission = new aws.lambda.Permission('allowS3Invoke', {
   sourceArn: landingBucket.arn,
 });
 
+// Wires the landing bucket to invoke the Lambda on new objects, closing the loop.
 new aws.s3.BucketNotification('landingNotifications',
   {
     bucket: landingBucket.id,

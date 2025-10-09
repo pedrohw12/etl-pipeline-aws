@@ -18,6 +18,8 @@ export class LambdaService {
     this.functionName = lambdaFunctionName;
   }
 
+  // Receives fabricated S3 events from EtlService (or other callers) and triggers
+  // the deployed Lambda asynchronously, handing control over to the actual handler.
   async invokeEtlLambda(payload: unknown): Promise<void> {
     await this.client.send(
       new InvokeCommand({

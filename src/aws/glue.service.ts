@@ -24,6 +24,8 @@ export class GlueService {
     this.transformedBucket = transformedBucket;
   }
 
+  // The ETL service and Lambda handler both hand in bucket/key pairs so this method
+  // can relay them to Glue; defaults ensure the transformed bucket is consistent.
   async startEtlJob(options: {
     sourceBucket: string;
     sourceKey: string;
@@ -47,6 +49,7 @@ export class GlueService {
     return runId;
   }
 
+  // Surface Glue execution status back to controllers so clients can poll job runs.
   async getJobRun(jobRunId: string) {
     const response = await this.client.send(
       new GetJobRunCommand({

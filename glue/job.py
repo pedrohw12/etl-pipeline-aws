@@ -3,6 +3,9 @@ import json
 import boto3
 from awsglue.utils import getResolvedOptions
 
+# Glue receives SOURCE/OUTPUT arguments from either the Lambda handler or local runs.
+# The script reads the raw object, enriches it, and writes results back to S3.
+
 args = getResolvedOptions(
     sys.argv,
     ["SOURCE_BUCKET", "SOURCE_KEY", "OUTPUT_BUCKET"],
