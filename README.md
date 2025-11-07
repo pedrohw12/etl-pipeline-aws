@@ -86,58 +86,63 @@ The NestJS application exposes endpoints that let you upload demo data, invoke t
 
 The controller responds with the bucket/key plus the Lambda request ID that accepted the ingestion. The Glue job starts asynchronously after the S3 notification fires; capture the job run ID from the processor Lambda logs and query `/etl/jobs/:id` when you need status. Custom `outputBucket` and `metadata` values travel with the object as S3 metadata so the processor Lambda can adjust the Glue invocation.
 
-## AWS resources to create
+## AWS deployment with Terraform (EC2 + Security Groups)
 
-You can provision the infrastructure manually or with the Pulumi project under `infra/`. At minimum you need S3 landing/transformed buckets, the Lambda trigger, a Glue job, and IAM roles that allow the components to interact.
+The `infra/terraform` folder contains a Terraform configuration that provisions an EC2 instance and security groups suitable for running this NestJS app.
 
-## Pulumi deployment
-
-The `infra/` folder contains a Pulumi TypeScript program that deploys everything the diagram shows: buckets, Lambda trigger, Glue job, IAM roles, and the S3 event notification wiring.
+### What it creates
+- An EC2 instance in your specified VPC/subnet
+- A security group allowing SSH (22) and your app port (default 3000)
+- Outputs with the instance ID, public IP, and public DNS
 
 ### Prerequisites
-- AWS CLI configured with credentials for the target account (`aws configure` or environment variables)
-- `pulumi` CLI installed (see [Pulumi installs](https://www.pulumi.com/docs/install/))
-- `npm` ≥ 8 and Node.js ≥ 18
+- AWS CLI configured with credentials for the target account (`aws configure`) or environment variables
+- Terraform CLI ≥ 1.5 (`brew install terraform` on macOS)
+- An existing VPC and a public subnet ID
+- Optional: an existing EC2 Key Pair for SSH access
 
-### Configure and deploy
-1. Install dependencies and log in to Pulumi (e.g. `pulumi login --local` or your preferred backend):
+### Configure variables
+Copy the example variables and set values:
 
-   ```bash
-   cd infra
-   npm install
-   pulumi login
-   ```
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars with your VPC ID, subnet ID, key_name, etc.
+```
 
-2. Create or select a stack (use `dev` as an example) and set optional config values:
+Key variables:
+- `vpc_id`: target VPC
+- `subnet_id`: public subnet for the instance
+- `key_name`: existing EC2 key pair name (set to null to disable SSH)
+- `app_port`: application port to open (defaults to 3000)
 
-   ```bash
-   pulumi stack init dev   # skip if the stack already exists
-   pulumi config set etl:landingBucketName your-landing-bucket-name --stack dev
-   pulumi config set etl:transformedBucketName your-transformed-bucket --stack dev
-   pulumi config set etl:ingestLambdaFunctionName etl-ingest --stack dev
-   pulumi config set etl:lambdaFunctionName etl-trigger --stack dev
-   pulumi config set etl:glueJobName etl-demo-job --stack dev
-   ```
+### Build and deploy
 
-   Empty values fall back to auto-generated names, so you can omit any of the settings above.
+```bash
+terraform init
+terraform plan
+terraform apply -auto-approve
+```
 
-3. Preview and deploy:
+Outputs show `public_ip` and `public_dns`. If you opened `app_port` to the world, the app will be reachable once your process is running on the instance.
 
-   ```bash
-   pulumi preview   # optional but recommended
-   pulumi up
-   ```
+### User data bootstrap
+The instance runs `infra/terraform/user_data.sh` on first boot. By default it installs Node.js and PM2. Customize the script to deploy your app (clone from Git, pull from S3/ECR, etc.), then start it, e.g. `pm2 start "npm run start:prod"`.
 
-The deployment outputs the bucket names, Lambda function, and Glue job. Resources are tagged and created with `forceDestroy` so they can be torn down easily during experimentation.
+### SSH access
+If you set `key_name` and allowed your IP in `allow_ssh_cidr`:
+
+```bash
+ssh -i /path/to/your.pem ec2-user@$(terraform output -raw public_dns)
+```
 
 ### Tear down
-- Destroy the stack when you are done:
 
-  ```bash
-  pulumi destroy
-  ```
+```bash
+terraform destroy -auto-approve
+```
 
-Once the Pulumi stack is deployed, the NestJS app can drive the pipeline end-to-end.
+Note: The previous Pulumi-based setup remains in `infra/` but is no longer the primary deployment path.
 
 ## Local development tips
 

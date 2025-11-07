@@ -1,0 +1,17 @@
+# Copy this file to terraform.tfvars and fill in values
+
+aws_region   = "us-east-1"
+vpc_id       = "vpc-0123456789abcdef0"
+subnet_id    = "subnet-0123456789abcdef0" # public subnet recommended
+instance_type = "t3.micro"
+key_name     = "your-ec2-keypair-name"     # set to null if you won't SSH
+ami_id       = null                         # or provide a specific AMI ID
+allow_ssh_cidr = "0.0.0.0/0"               # restrict to your IP in production
+allow_app_cidr = "0.0.0.0/0"               # or a load balancer / CDN CIDR
+app_port       = 3000
+tags = {
+  Project = "portfolio"
+  Env     = "dev"
+}
+
+
